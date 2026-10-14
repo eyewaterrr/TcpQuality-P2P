@@ -13,6 +13,7 @@ param(
     [switch]$Route,
     [switch]$Speed,
     [switch]$Full,
+    [switch]$Quick,
     [ValidateRange(1, 65535)] [int]$IperfPort = 5201,
     [ValidateRange(1, 120)] [int]$Seconds = 8,
     [string]$MaxRate,
@@ -24,7 +25,7 @@ param(
 )
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Stop'
-$Version = '0.1.0'
+$Version = '0.1.1'
 
 function Get-ResolvedAddress([string]$Name, [bool]$Only4, [bool]$Only6) {
     $addresses = [System.Net.Dns]::GetHostAddresses($Name)
@@ -183,10 +184,13 @@ if ($Serve) {
 }
 if ([string]::IsNullOrWhiteSpace($Target)) { throw '请指定目标 IP。例如：& ([scriptblock]::Create((irm URL))) -Target 1.2.3.4' }
 if ($IPv4 -and $IPv6) { throw '-IPv4 与 -IPv6 不能同时指定。' }
+if ($Full -and $Quick) { throw '-Full 与 -Quick 不能同时指定。' }
 if ($Full) { $Route = $true; $Speed = $true }
+elseif (-not $Quick) { $Route = $true }
 $addr = Get-ResolvedAddress $Target $IPv4.IsPresent $IPv6.IsPresent
 $ip = $addr.ToString()
-Write-Host "TcpQuality-P2P v$Version | 本机 -> $Target ($ip)"
+$familyName = if ($addr.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6) { 'IPv6' } else { 'IPv4' }
+Write-Host "TcpQuality-P2P v$Version | 本机 -> $Target ($ip) | $familyName"
 Write-Host "`n[1] TCP connect 测试 | ${ip}:${Port} | 共 $Count 次"
 $samples = @()
 for ($i = 1; $i -le $Count; $i++) {
@@ -219,7 +223,13 @@ if ($Route) {
     try { $report.route = Invoke-Route $ip }
     catch { $report.route = [pscustomobject]@{ status = 'error'; reason = $_.Exception.Message } }
 }
-if ($Speed) { $report.speed = Invoke-Bandwidth $ip $IperfPort $Seconds $MaxRate ($addr.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6) }
+if ($Speed) {
+    $report.speed = Invoke-Bandwidth $ip $IperfPort $Seconds $MaxRate ($addr.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6)
+}
+else {
+    Write-Host "`n[3] 双向带宽：未执行（为避免意外耗费流量，需显式添加 -Full 或 -Speed）"
+    Write-Host '  需要本机安装 iperf3，目标运行 iperf3 -s，并允许连接目标 TCP 5201。'
+}
 if ($Json) {
     $jsonText = $report | ConvertTo-Json -Depth 10
     $jsonFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Json)
