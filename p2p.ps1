@@ -1,4 +1,4 @@
-# TcpQuality-P2P | Windows PowerShell 5.1+ / PowerShell 7+
+﻿# TcpQuality-P2P | Windows PowerShell 5.1+ / PowerShell 7+
 # GPL-3.0-only. No Python, administrator permission or third-party dependency
 # required for the default TCP connect probe.
 [CmdletBinding()]
