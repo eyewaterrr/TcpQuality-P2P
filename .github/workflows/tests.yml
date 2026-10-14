@@ -26,10 +26,8 @@ jobs:
           $parseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\p2p.ps1), [ref]$tokens, [ref]$parseErrors) | Out-Null
           if ($parseErrors.Count -gt 0) { $parseErrors | Format-List | Out-String | Write-Host; exit 1 }
-          $job = Start-Job -ScriptBlock {
-            param($scriptFile)
-            & $scriptFile -Serve -Bind 127.0.0.1 -ListenPort 49222
-          } -ArgumentList ((Resolve-Path .\p2p.ps1).Path)
+          $scriptPath = (Resolve-Path .\p2p.ps1).Path
+          $server = Start-Process -FilePath "$PSHOME\powershell.exe" -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath, '-Serve', '-Bind', '127.0.0.1', '-ListenPort', '49222')
           try {
             Start-Sleep -Seconds 2
             .\p2p.ps1 -Target 127.0.0.1 -Port 49222 -Count 3 -Interval 0 -Quick -Json test-report.json
@@ -37,6 +35,5 @@ jobs:
             if ($report.stats.received -ne 3) { throw "TCP smoke test failed: $($report.stats.received) responses" }
           }
           finally {
-            Stop-Job $job -ErrorAction SilentlyContinue
-            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            if ($server -and -not $server.HasExited) { $server.Kill(); $server.WaitForExit(5000) | Out-Null }
           }
