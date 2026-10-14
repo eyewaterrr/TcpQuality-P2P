@@ -1,0 +1,42 @@
+name: Offline tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      - name: Shell syntax
+        run: bash -n p2p.sh
+      - name: Python offline tests
+        run: python -m unittest discover -s tests -v
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and smoke test Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\p2p.ps1), [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { $parseErrors | Format-List | Out-String | Write-Host; exit 1 }
+          $job = Start-Job -ScriptBlock {
+            param($scriptFile)
+            & $scriptFile -Serve -Bind 127.0.0.1 -ListenPort 49222
+          } -ArgumentList ((Resolve-Path .\p2p.ps1).Path)
+          try {
+            Start-Sleep -Seconds 2
+            .\p2p.ps1 -Target 127.0.0.1 -Port 49222 -Count 3 -Interval 0 -Json test-report.json
+            $report = Get-Content test-report.json -Raw | ConvertFrom-Json
+            if ($report.stats.received -ne 3) { throw "TCP smoke test failed: $($report.stats.received) responses" }
+          }
+          finally {
+            Stop-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+          }
