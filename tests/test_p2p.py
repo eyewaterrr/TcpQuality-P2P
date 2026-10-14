@@ -73,7 +73,7 @@ class OfflineTests(unittest.TestCase):
             cp = Path(tmp) / 'samples.csv'
             process = subprocess.run(
                 [sys.executable, str(APP), '127.0.0.1', '--port', str(server.port),
-                 '-c', '3', '--interval', '0', '--mode', 'connect',
+                 '-c', '3', '--interval', '0', '--mode', 'connect', '--quick',
                  '--json', str(jp), '--csv', str(cp)],
                 capture_output=True, text=True, timeout=15)
             self.assertEqual(process.returncode, 0, process.stderr + process.stdout)
@@ -86,7 +86,7 @@ class OfflineTests(unittest.TestCase):
         with TCPServer() as server:
             port = server.port
         process = subprocess.run([sys.executable, str(APP), '127.0.0.1', '--port', str(port),
-                                  '-c', '2', '--interval', '0', '--mode', 'connect'],
+                                  '-c', '2', '--interval', '0', '--mode', 'connect', '--quick'],
                                  capture_output=True, text=True, timeout=15)
         self.assertEqual(process.returncode, 1)
         self.assertIn('端口拒绝 2', process.stdout)
@@ -100,6 +100,19 @@ class OfflineTests(unittest.TestCase):
             status, rtt, _ = p2p.syn_probe('127.0.0.1', 5201, 1)
         self.assertEqual(status, 'ok')
         self.assertAlmostEqual(rtt, 2)
+
+    def test_default_modes(self):
+        basic = p2p.arguments(['127.0.0.1'])
+        self.assertTrue(basic.route)
+        self.assertFalse(basic.speed)
+        quick = p2p.arguments(['127.0.0.1', '--quick'])
+        self.assertFalse(quick.route)
+        self.assertFalse(quick.speed)
+        full = p2p.arguments(['127.0.0.1', '--full'])
+        self.assertTrue(full.route)
+        self.assertTrue(full.speed)
+        with self.assertRaises(SystemExit):
+            p2p.arguments(['127.0.0.1', '--quick', '--full'])
 
     def test_reject_invalid_argument(self):
         with self.assertRaises(SystemExit):
