@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 
 def arguments(argv=None):
@@ -41,6 +41,7 @@ def arguments(argv=None):
     p.add_argument("--route", action="store_true", help="执行 TCP 路由追踪")
     p.add_argument("--speed", action="store_true", help="执行 iperf3 单线程正向及反向带宽测试")
     p.add_argument("--full", action="store_true", help="TCP 探测、路由和双向带宽（缺少 iperf3 时跳过）")
+    p.add_argument("--quick", action="store_true", help="只测试 TCP 连接，不执行默认路由追踪")
     p.add_argument("--iperf-port", type=int, default=5201, help="iperf3 服务端口，默认 5201")
     p.add_argument("--seconds", type=int, default=8, help="每个方向的带宽测试秒数，默认 8")
     p.add_argument("--max-rate", default=None, help="iperf3 的 TCP 速率上限，例如 30M，默认不限速")
@@ -63,9 +64,13 @@ def arguments(argv=None):
         p.error("--max-rate 格式示例：30M / 1G")
     if not args.serve and not args.target:
         p.error("请指定目标 IP，例如：p2p.py 1.2.3.4")
+    if args.full and args.quick:
+        p.error("--full 与 --quick 不能同时指定")
     if args.full:
         args.route = True
         args.speed = True
+    elif not args.quick:
+        args.route = True
     return args
 
 
@@ -186,6 +191,7 @@ def route_trace(ip, port, ipv6=False):
                    "-m", "16", "-w", "1", "-q", "1", ip]
         kind = "TCP traceroute"
     else:
+        print("\n[2] 路由追踪：未安装 traceroute，已跳过。")
         return {"status": "skipped", "reason": "未安装 traceroute"}
     print("\n[2] 路由追踪 | " + kind, flush=True)
     try:
@@ -295,7 +301,8 @@ def main(argv=None):
     if method == "syn" and (not shutil.which("nping") or (hasattr(os, "geteuid") and os.geteuid() != 0)):
         print("错误：--mode syn 需要 nping 和 root 权限。", file=sys.stderr)
         return 2
-    print(f"TcpQuality-P2P v{VERSION} | 本机 -> {args.target} ({ip})")
+    ip_family = "IPv6" if family == socket.AF_INET6 else "IPv4"
+    print(f"TcpQuality-P2P v{VERSION} | 本机 -> {args.target} ({ip}) | {ip_family}")
     samples, stats = run_probes(args, family, ip, method)
     report = {"tool": "TcpQuality-P2P", "version": VERSION,
               "time_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -306,6 +313,9 @@ def main(argv=None):
         report["route"] = route_trace(ip, args.port, family == socket.AF_INET6)
     if args.speed:
         report["speed"] = speed_test(ip, args.iperf_port, args.seconds, args.max_rate, family == socket.AF_INET6)
+    else:
+        print("\n[3] 双向带宽：未执行（为避免意外耗费流量，需显式添加 --full 或 --speed）")
+        print("  需要本机安装 iperf3，目标运行 iperf3 -s，并允许连接目标 TCP 5201。")
     write_files(args, report)
     return 0 if stats["received"] else 1
 
