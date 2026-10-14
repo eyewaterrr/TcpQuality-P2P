@@ -81,6 +81,8 @@ sudo apt-get update && sudo apt-get install -y iperf3
 iperf3 -s
 ```
 
+Windows 本地电脑还需要一个可用的 `iperf3.exe`。ESnet 官方暂不正式支持 Windows 上的 iperf3，可使用社区维护的 [userdocs/iperf3-static Windows x64 发行包](https://github.com/userdocs/iperf3-static/releases/latest)（下载 `iperf3-amd64-win.zip`，请自行核对发布来源与校验值）。解压后保留 `iperf3.exe` 与同目录依赖 DLL，将该目录加入 PATH，再运行 `Get-Command iperf3` 验证。也可以在 WSL 中直接安装 Linux 版 iperf3；请注意 WSL 的网络栈可能改变测试路径。
+
 然后在发起设备运行 `--full`（Windows：`-Full`）。`iperf3 -R` 在已建立的控制连接上反向传输：即使本地 Windows 在 NAT 后面，只要**本地能连接 VPS 的 5201**，通常也能测量 VPS→本地的下载吞吐量。
 
 注意：`--full` 的 iperf3 默认不限速，每个方向 8 秒，可能产生较大流量；用 `--max-rate 30M`（Windows：`-MaxRate 30M`）设置传输速率上限。设置速率上限后，得到的是该上限下的吞吐量，不是链路最大速率。
